@@ -1,0 +1,14 @@
+[
+    {
+      "name": "maven-dependency-plugin",
+      "url": "https://github.com/apache/maven-dependency-plugin.git"
+    },
+    {
+      "name": "maven-build-cache-extension",
+      "url": "https://github.com/apache/maven-build-cache-extension.git"
+    },
+    {
+      "name": "maven-jlink-plugin",
+      "url": "https://github.com/apache/maven-jlink-plugin.git"
+    }
+]
