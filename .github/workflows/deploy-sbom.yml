@@ -29,7 +29,7 @@ jobs:
         env:
           DEPENDENCYTRACK_API_KEY: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
         run: |
-          for repo in ${{ steps.read-repos.outputs.repos }}; do
+          echo '${{ steps.read-repos.outputs.repos }}' | jq -c '.[]' | while read -r repo; do
             repo_name=$(echo "$repo" | jq -r '.name')
             repo_url=$(echo "$repo" | jq -r '.url')
             echo "Processing $repo_name..."
