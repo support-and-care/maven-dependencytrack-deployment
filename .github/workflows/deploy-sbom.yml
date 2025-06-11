@@ -24,7 +24,7 @@ jobs:
       - name: Read Repository List
         id: read-repos
         run: |
-          echo "repos=$(jq -c '.[]' repos.json)" >> $GITHUB_OUTPUT
+          echo "repos=$(jq -c '.' repos.json)" >> $GITHUB_OUTPUT
 
       - name: Process Repositories
         env:
