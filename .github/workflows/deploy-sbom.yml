@@ -23,30 +23,45 @@ jobs:
       - name: Read Repository List
         id: read-repos
         run: |
-          echo "repos=$(jq -c '.' repos.json)" >> "$GITHUB_OUTPUT"
+          REPOS_JSON=$(jq -c '.' repos.json)
+          echo "REPOS_JSON<<EOF" >> $GITHUB_ENV
+          echo "$REPOS_JSON" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
-      - name: Process Repositories
+      - name: Clone, Generate, and Upload SBOMs
         env:
           DEPENDENCYTRACK_API_KEY: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
-          REPOS_JSON: ${{ steps.read-repos.outputs.repos }}
         run: |
           echo "$REPOS_JSON" | jq -c '.[]' | while read -r repo; do
             repo_name=$(echo "$repo" | jq -r '.name')
             repo_url=$(echo "$repo" | jq -r '.url')
-            echo "Cloning $repo_name from $repo_url..."
+
+            echo "➡️ Cloning $repo_name from $repo_url"
             git clone "$repo_url" || continue
             cd "$repo_name" || continue
 
-            echo "Generating SBOM for $repo_name..."
+            echo "Generating SBOM for $repo_name"
             mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom || true
 
-            echo "Uploading SBOM for $repo_name..."
-            curl -X POST \
-              -H "X-Api-Key: $DEPENDENCYTRACK_API_KEY" \
-              -H "Content-Type: application/xml" \
-              --data-binary @target/bom.xml \
-              "https://api.dependencytrack.open-elements.cloud/api/v1/bom?autoCreate=true&projectName=$repo_name&projectVersion=master" || true
+            if [[ -f "target/bom.xml" ]]; then
+              echo "Uploading SBOM for $repo_name"
+              gh workflow run gh-upload-sbom.yml \
+                --repo DependencyTrack/gh-upload-sbom \
+                --ref v3 \
+                -f serverHostname=api.dependencytrack.open-elements.cloud \
+                -f apiKey=${DEPENDENCYTRACK_API_KEY} \
+                -f projectName=${repo_name} \
+                -f projectVersion=main \
+                -f bomFilename=target/bom.xml \
+                -f autoCreate=true || echo "Upload failed for $repo_name"
+            else
+              echo "⚠️ SBOM not found for $repo_name"
+            fi
 
             cd ..
-            echo "Completed processing $repo_name"
           done
+
+      # Optional: Clean up cloned repos
+      - name: Clean up workspace
+        run: |
+          echo "$REPOS_JSON" | jq -r '.[].name' | xargs rm -rf
