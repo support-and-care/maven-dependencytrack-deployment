@@ -23,30 +23,30 @@ jobs:
       - name: Read Repository List
         id: read-repos
         run: |
-          echo "repos=$(jq -c '.' repos.json)" >> $GITHUB_OUTPUT
+          echo "repos=$(jq -c '.' repos.json)" >> "$GITHUB_OUTPUT"
 
       - name: Process Repositories
         env:
           DEPENDENCYTRACK_API_KEY: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
+          REPOS_JSON: ${{ steps.read-repos.outputs.repos }}
         run: |
-          echo '${{ steps.read-repos.outputs.repos }}' | jq -c '.[]' | while read -r repo; do
+          echo "$REPOS_JSON" | jq -c '.[]' | while read -r repo; do
             repo_name=$(echo "$repo" | jq -r '.name')
             repo_url=$(echo "$repo" | jq -r '.url')
-            echo "Processing $repo_name..."
-            git clone "$repo_url" || true
-            cd "$repo_name" || true
-            mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom || true
-            echo "Completed $repo_name"
-          done
+            echo "Cloning $repo_name from $repo_url..."
+            git clone "$repo_url" || continue
+            cd "$repo_name" || continue
 
-      - name: Deploy SBOM to DependencyTrack
-        uses: DependencyTrack/gh-upload-sbom@v3
-        with:
-          serverHostname: 'api.dependencytrack.open-elements.cloud'
-          apiKey: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
-          projectName: ${{ env.REPO_NAME }}
-          projectVersion: 'main'
-          bomFilename: "${{ env.REPO_NAME }}/target/bom.xml"
-          autoCreate: true
-        env:
-          REPO_NAME: ${{ env.repo_name }}
+            echo "Generating SBOM for $repo_name..."
+            mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom || true
+
+            echo "Uploading SBOM for $repo_name..."
+            curl -X PUT \
+              -H "X-Api-Key: $DEPENDENCYTRACK_API_KEY" \
+              -H "Content-Type: application/xml" \
+              --data-binary @target/bom.xml \
+              "https://api.dependencytrack.open-elements.cloud/api/v1/bom?autoCreate=true&projectName=$repo_name&projectVersion=main" || true
+
+            cd ..
+            echo "Completed processing $repo_name"
+          done
