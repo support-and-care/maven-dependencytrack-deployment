@@ -41,7 +41,7 @@ jobs:
             mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom || true
 
             echo "Uploading SBOM for $repo_name..."
-            curl -X PUT \
+            curl -X POST \
               -H "X-Api-Key: $DEPENDENCYTRACK_API_KEY" \
               -H "Content-Type: application/xml" \
               --data-binary @target/bom.xml \
