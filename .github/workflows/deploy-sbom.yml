@@ -45,7 +45,7 @@ jobs:
               -H "X-Api-Key: $DEPENDENCYTRACK_API_KEY" \
               -H "Content-Type: application/xml" \
               --data-binary @target/bom.xml \
-              "https://api.dependencytrack.open-elements.cloud/api/v1/bom?autoCreate=true&projectName=$repo_name&projectVersion=main" || true
+              "https://api.dependencytrack.open-elements.cloud/api/v1/bom?autoCreate=true&projectName=$repo_name&projectVersion=master" || true
 
             cd ..
             echo "Completed processing $repo_name"
