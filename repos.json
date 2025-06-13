@@ -10,5 +10,9 @@
     {
       "name": "maven-jlink-plugin",
       "url": "https://github.com/apache/maven-jlink-plugin.git"
+    },
+    {
+      "name": "maven-verifier-plugin",
+      "url": "https://github.com/apache/maven-verifier-plugin"
     }
 ]
