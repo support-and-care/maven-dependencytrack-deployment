@@ -1,53 +1,52 @@
 name: Deploy SBOMs to DependencyTrack
 
 on:
-  workflow_dispatch:
-  push:
+  pull_request:
     branches: [ "main" ]
 
 jobs:
-  sbom:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Checkout Main Project
+      - name: Checkout this repo
         uses: actions/checkout@v4
+
+      - name: Read repos.json and convert to matrix
+        id: set-matrix
+        run: |
+          JSON=$(cat repos.json | jq -c)
+          echo "matrix=$JSON" >> $GITHUB_OUTPUT
+
+  build-and-upload:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Clone repo ${{ matrix.name }}
+        run: git clone ${{ matrix.url }} ${{ matrix.name }}
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: maven
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Generate SBOM using CycloneDX
+        working-directory: ./${{ matrix.name }}
+        run: mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom
 
-      - name: Read Repository List
-        id: read-repos
-        run: |
-          echo "repos=$(jq -c '.[]' repos.json)" >> $GITHUB_OUTPUT
-
-      - name: Process Repositories
-        env:
-          DEPENDENCYTRACK_API_KEY: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
-        run: |
-          for repo in ${{ steps.read-repos.outputs.repos }}; do
-            repo_name=$(echo "$repo" | jq -r '.name')
-            repo_url=$(echo "$repo" | jq -r '.url')
-            echo "Processing $repo_name..."
-            git clone "$repo_url" || true
-            cd "$repo_name" || true
-            mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom || true
-            echo "Completed $repo_name"
-          done
-
-      - name: Deploy SBOM to DependencyTrack
+      - name: Upload SBOM to DependencyTrack
         uses: DependencyTrack/gh-upload-sbom@v3
         with:
           serverHostname: 'api.dependencytrack.open-elements.cloud'
           apiKey: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
-          projectName: ${{ env.REPO_NAME }}
+          projectName: ${{ matrix.name }}
           projectVersion: 'main'
-          bomFilename: "${{ env.REPO_NAME }}/target/bom.xml"
+          bomFilename: "${{ matrix.name }}/target/bom.xml"
           autoCreate: true
-        env:
-          REPO_NAME: ${{ env.repo_name }}
